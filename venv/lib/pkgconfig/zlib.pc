@@ -1,0 +1,13 @@
+prefix=/home/unique/Dev/CJBS-CHATBOT/venv
+exec_prefix=/home/unique/Dev/CJBS-CHATBOT/venv
+libdir=/home/unique/Dev/CJBS-CHATBOT/venv/lib
+sharedlibdir=/home/unique/Dev/CJBS-CHATBOT/venv/lib
+includedir=/home/unique/Dev/CJBS-CHATBOT/venv/include
+
+Name: zlib
+Description: zlib compression library
+Version: 1.2.13
+
+Requires:
+Libs: -L${libdir} -L${sharedlibdir} -lz
+Cflags: -I${includedir}

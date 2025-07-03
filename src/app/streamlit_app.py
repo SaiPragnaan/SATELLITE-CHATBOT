@@ -67,6 +67,16 @@ if 'thoughts' not in st.session_state:
         'cost': None
     }
 
+# --- AGENT STOP BUTTON LOGIC ---
+if 'stop_agent' not in st.session_state:
+    st.session_state['stop_agent'] = False
+
+def stop_agent():
+    st.session_state['stop_agent'] = True
+
+def reset_stop_agent():
+    st.session_state['stop_agent'] = False
+
 def run_agent(agent, key):
     result = agent.call(satellite_name)
     # Try to extract agent's thinking (if present)
@@ -89,6 +99,28 @@ def render_links(data):
     for key, value in data.items():
         if isinstance(value, str) and url_pattern.match(value):
             st.markdown(f"[{key.replace('_', ' ').title()}]({value})", unsafe_allow_html=True)
+
+def format_key(key):
+    # Convert snake_case or camelCase to Title Case with spaces
+    key = re.sub(r'(_|-)+', ' ', key)  # snake_case or kebab-case to spaces
+    key = re.sub(r'([a-z])([A-Z])', r'\1 \2', key)  # camelCase to spaces
+    return key.strip().title()
+
+def pretty_print_dict_table(d, indent=0):
+    rows = []
+    for key, value in d.items():
+        display_key = format_key(key)
+        cell_style = f"vertical-align:top; font-weight:bold; padding-left:{indent*16}px; padding: 0.5em 0.7em;"
+        value_style = "padding: 0.5em 0.7em;"
+        if isinstance(value, dict):
+            nested = pretty_print_dict_table(value, indent + 1)
+            rows.append(f"<tr><td style='{cell_style}'>{display_key}:</td><td style='{value_style}'>{nested}</td></tr>")
+        elif isinstance(value, str) and value.startswith("http"):
+            rows.append(f"<tr><td style='{cell_style}'>{display_key}:</td><td style='{value_style}'><a href='{value}' target='_blank'>{value}</a></td></tr>")
+        else:
+            rows.append(f"<tr><td style='{cell_style}'>{display_key}:</td><td style='{value_style}'>{value}</td></tr>")
+    table = "<table style='width:100%; border-collapse:separate; border-spacing:0 0.3em;'>" + "".join(rows) + "</table>"
+    return table
 
 if page.startswith("🏠"):
     st.markdown("""
@@ -146,54 +178,74 @@ if page.startswith("📝"):
     st.header("📝 Basic Mission Data")
     st.info("Extracts general mission details, orbit, and payload info.", icon="🛰️")
     st.markdown("<hr>", unsafe_allow_html=True)
-    if st.button("Run Basic Mission Agent", key="run_basic", use_container_width=True):
-        with st.spinner("Running Basic Mission Data Agent..."):
-            run_agent(BasicMissionData(), 'basic')
+    col1, col2 = st.columns([2,1])
+    with col1:
+        if st.button("Run Basic Mission Agent", key="run_basic", use_container_width=True):
+            reset_stop_agent()
+            with st.spinner("Running Basic Mission Data Agent..."):
+                run_agent(BasicMissionData(), 'basic')
+    with col2:
+        if st.button("Stop Agent", key="stop_basic", use_container_width=True):
+            stop_agent()
     if st.session_state['results']['basic']:
         with st.expander("Show Agent's Thinking (Basic Mission Data)", expanded=False):
             st.code(st.session_state['thoughts']['basic'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
-        render_links(st.session_state['results']['basic'])
-        st.json(st.session_state['results']['basic'])
+        st.markdown(pretty_print_dict_table(st.session_state['results']['basic']), unsafe_allow_html=True)
 
 if page.startswith("🔬"):
     st.header("🔬 Technical Data")
     st.info("Extracts sensor specs, spectral bands, and technological breakthroughs.", icon="🔬")
     st.markdown("<hr>", unsafe_allow_html=True)
-    if st.button("Run Technical Data Agent", key="run_technical", use_container_width=True):
-        with st.spinner("Running Technical Data Agent..."):
-            run_agent(TechnicalData(), 'technical')
+    col1, col2 = st.columns([2,1])
+    with col1:
+        if st.button("Run Technical Data Agent", key="run_technical", use_container_width=True):
+            reset_stop_agent()
+            with st.spinner("Running Technical Data Agent..."):
+                run_agent(TechnicalData(), 'technical')
+    with col2:
+        if st.button("Stop Agent", key="stop_technical", use_container_width=True):
+            stop_agent()
     if st.session_state['results']['technical']:
         with st.expander("Show Agent's Thinking (Technical Data)", expanded=False):
             st.code(st.session_state['thoughts']['technical'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
-        render_links(st.session_state['results']['technical'])
-        st.json(st.session_state['results']['technical'])
+        st.markdown(pretty_print_dict_table(st.session_state['results']['technical']), unsafe_allow_html=True)
 
 if page.startswith("🚀"):
     st.header("🚀 Launch Data")
     st.info("Extracts launch mass, success, and reusability details.", icon="🚀")
     st.markdown("<hr>", unsafe_allow_html=True)
-    if st.button("Run Launch Data Agent", key="run_launch", use_container_width=True):
-        with st.spinner("Running Launch Data Agent..."):
-            run_agent(LaunchData(), 'launch')
+    col1, col2 = st.columns([2,1])
+    with col1:
+        if st.button("Run Launch Data Agent", key="run_launch", use_container_width=True):
+            reset_stop_agent()
+            with st.spinner("Running Launch Data Agent..."):
+                run_agent(LaunchData(), 'launch')
+    with col2:
+        if st.button("Stop Agent", key="stop_launch", use_container_width=True):
+            stop_agent()
     if st.session_state['results']['launch']:
         with st.expander("Show Agent's Thinking (Launch Data)", expanded=False):
             st.code(st.session_state['thoughts']['launch'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
-        render_links(st.session_state['results']['launch'])
-        st.json(st.session_state['results']['launch'])
+        st.markdown(pretty_print_dict_table(st.session_state['results']['launch']), unsafe_allow_html=True)
 
 if page.startswith("💰"):
     st.header("💰 Cost & Other Data")
     st.info("Extracts mission cost, launch cost, vehicle type, and launch date.", icon="💰")
     st.markdown("<hr>", unsafe_allow_html=True)
-    if st.button("Run Cost & Other Data Agent", key="run_cost", use_container_width=True):
-        with st.spinner("Running Cost & Other Data Agent..."):
-            run_agent(CostAndOtherData(), 'cost')
+    col1, col2 = st.columns([2,1])
+    with col1:
+        if st.button("Run Cost & Other Data Agent", key="run_cost", use_container_width=True):
+            reset_stop_agent()
+            with st.spinner("Running Cost & Other Data Agent..."):
+                run_agent(CostAndOtherData(), 'cost')
+    with col2:
+        if st.button("Stop Agent", key="stop_cost", use_container_width=True):
+            stop_agent()
     if st.session_state['results']['cost']:
         with st.expander("Show Agent's Thinking (Cost & Other Data)", expanded=False):
             st.code(st.session_state['thoughts']['cost'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
-        render_links(st.session_state['results']['cost'])
-        st.json(st.session_state['results']['cost'])
+        st.markdown(pretty_print_dict_table(st.session_state['results']['cost']), unsafe_allow_html=True)

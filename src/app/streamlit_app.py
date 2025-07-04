@@ -11,6 +11,7 @@ import json
 import re
 import io
 import pandas as pd
+from src.utils.cache import get_from_cache, save_to_cache, export_cache_as_rows
 
 st.set_page_config(page_title="Satellite Data Extraction", layout="wide")
 
@@ -84,26 +85,36 @@ if 'launch_running' not in st.session_state:
 if 'cost_running' not in st.session_state:
     st.session_state['cost_running'] = False
 
+if 'basic_from_cache' not in st.session_state:
+    st.session_state['basic_from_cache'] = False
+if 'technical_from_cache' not in st.session_state:
+    st.session_state['technical_from_cache'] = False
+if 'launch_from_cache' not in st.session_state:
+    st.session_state['launch_from_cache'] = False
+if 'cost_from_cache' not in st.session_state:
+    st.session_state['cost_from_cache'] = False
+
 def stop_agent():
     st.session_state['stop_agent'] = True
 
 def reset_stop_agent():
     st.session_state['stop_agent'] = False
 
-def run_agent(agent, key):
+def run_agent(agent, key, section, force_run=False):
+    if not force_run:
+        cached = get_from_cache(satellite_name, section)
+        if cached:
+            st.session_state['results'][key] = cached
+            st.session_state['thoughts'][key] = cached.get('raw_output', None)
+            st.session_state[f'{key}_from_cache'] = True
+            return
     result = agent.call(satellite_name)
-    # Try to extract agent's thinking (if present)
-    thoughts = None
-    if 'raw_output' in result and result['raw_output']:
-        import re
-        pattern = r"(Thought:.*?)(?=Final Answer:|$)"
-        matches = re.findall(pattern, result['raw_output'], re.DOTALL)
-        if matches:
-            thoughts = '\n---\n'.join([m.strip() for m in matches])
-        else:
-            thoughts = result['raw_output']
     st.session_state['results'][key] = result
-    st.session_state['thoughts'][key] = thoughts
+    st.session_state['thoughts'][key] = result.get('raw_output', None)
+    st.session_state[f'{key}_from_cache'] = False
+    # Only save to cache if there is no error
+    if not (isinstance(result, dict) and 'error' in result):
+        save_to_cache(satellite_name, section, result)
 
 def render_links(data):
     if not isinstance(data, dict):
@@ -187,26 +198,48 @@ if page.startswith("🏠"):
     st.markdown("---")
     st.caption("Developed with ❤️ using Streamlit and LangChain agents. UI will be enhanced with more features soon!")
 
+    # Download all database as CSV
+    st.subheader("Download All Satellite Data")
+    all_rows = export_cache_as_rows()
+    if all_rows:
+        df_all = pd.DataFrame(all_rows)
+        csv_buffer = io.StringIO()
+        df_all.to_csv(csv_buffer, index=False)
+        st.download_button(
+            label="Download Full Database as CSV",
+            data=csv_buffer.getvalue(),
+            file_name="satellite_database.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No satellite data in the database yet.")
+
 if page.startswith("📝"):
     st.header("📝 Basic Mission Data")
     st.info("Extracts general mission details, orbit, and payload info.", icon="🛰️")
     st.markdown("<hr>", unsafe_allow_html=True)
-    col1, col2 = st.columns([2,1])
+    col1, col2, col3 = st.columns([2,1,1])
     run_pressed = col1.button("Run Basic Mission Agent", key="run_basic", use_container_width=True)
     stop_pressed = col2.button("Stop Agent", key="stop_basic", use_container_width=True)
+    force_pressed = col3.button("Force Re-Run", key="force_basic", use_container_width=True)
     if run_pressed:
         reset_stop_agent()
         st.session_state['basic_running'] = True
-        with st.spinner("Running Basic Mission Data Agent..."):
-            run_agent(BasicMissionData(), 'basic')
+        run_agent(BasicMissionData(), 'basic', 'basic', force_run=False)
         st.session_state['basic_running'] = False
     if stop_pressed:
         stop_agent()
-    # Show message if agent was stopped
+    if force_pressed:
+        reset_stop_agent()
+        st.session_state['basic_running'] = True
+        run_agent(BasicMissionData(), 'basic', 'basic', force_run=True)
+        st.session_state['basic_running'] = False
     if st.session_state.get('stop_agent') and run_pressed:
         st.warning("🛑 You have stopped the agent execution.")
     if st.session_state.get('basic_running', False):
         st.info("⏳ Agent is running in the background. Please wait...")
+    if st.session_state['basic_from_cache']:
+        st.info("ℹ️ This data was previously stored in the database. You can force a fresh run above.")
     if st.session_state['results']['basic']:
         with st.expander("Show Agent's Thinking (Basic Mission Data)", expanded=False):
             raw_output = st.session_state['results']['basic'].get('raw_output')
@@ -219,7 +252,6 @@ if page.startswith("📝"):
         # Download section
         result = st.session_state['results']['basic']
         if isinstance(result, dict):
-            # Remove raw_output and error fields for CSV
             csv_data = {k: v for k, v in result.items() if k not in ('raw_output', 'error', 'satellite_name')}
             df = pd.DataFrame([csv_data])
             csv_buffer = io.StringIO()
@@ -242,7 +274,7 @@ if page.startswith("🔬"):
         reset_stop_agent()
         st.session_state['technical_running'] = True
         with st.spinner("Running Technical Data Agent..."):
-            run_agent(TechnicalData(), 'technical')
+            run_agent(TechnicalData(), 'technical', 'technical')
         st.session_state['technical_running'] = False
     if stop_pressed:
         stop_agent()
@@ -284,7 +316,7 @@ if page.startswith("🚀"):
         reset_stop_agent()
         st.session_state['launch_running'] = True
         with st.spinner("Running Launch Data Agent..."):
-            run_agent(LaunchData(), 'launch')
+            run_agent(LaunchData(), 'launch', 'launch')
         st.session_state['launch_running'] = False
     if stop_pressed:
         stop_agent()
@@ -326,7 +358,7 @@ if page.startswith("💰"):
         reset_stop_agent()
         st.session_state['cost_running'] = True
         with st.spinner("Running Cost & Other Data Agent..."):
-            run_agent(CostAndOtherData(), 'cost')
+            run_agent(CostAndOtherData(), 'cost', 'cost')
         st.session_state['cost_running'] = False
     if stop_pressed:
         stop_agent()

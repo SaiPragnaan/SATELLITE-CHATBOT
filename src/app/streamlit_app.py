@@ -9,6 +9,8 @@ from agents.launch_data import LaunchData
 from agents.cost_and_other_data import CostAndOtherData
 import json
 import re
+import io
+import pandas as pd
 
 st.set_page_config(page_title="Satellite Data Extraction", layout="wide")
 
@@ -70,6 +72,17 @@ if 'thoughts' not in st.session_state:
 # --- AGENT STOP BUTTON LOGIC ---
 if 'stop_agent' not in st.session_state:
     st.session_state['stop_agent'] = False
+
+if 'basic_running' not in st.session_state:
+    st.session_state['basic_running'] = False
+
+# Add running state flags for other agents
+if 'technical_running' not in st.session_state:
+    st.session_state['technical_running'] = False
+if 'launch_running' not in st.session_state:
+    st.session_state['launch_running'] = False
+if 'cost_running' not in st.session_state:
+    st.session_state['cost_running'] = False
 
 def stop_agent():
     st.session_state['stop_agent'] = True
@@ -179,73 +192,167 @@ if page.startswith("📝"):
     st.info("Extracts general mission details, orbit, and payload info.", icon="🛰️")
     st.markdown("<hr>", unsafe_allow_html=True)
     col1, col2 = st.columns([2,1])
-    with col1:
-        if st.button("Run Basic Mission Agent", key="run_basic", use_container_width=True):
-            reset_stop_agent()
-            with st.spinner("Running Basic Mission Data Agent..."):
-                run_agent(BasicMissionData(), 'basic')
-    with col2:
-        if st.button("Stop Agent", key="stop_basic", use_container_width=True):
-            stop_agent()
+    run_pressed = col1.button("Run Basic Mission Agent", key="run_basic", use_container_width=True)
+    stop_pressed = col2.button("Stop Agent", key="stop_basic", use_container_width=True)
+    if run_pressed:
+        reset_stop_agent()
+        st.session_state['basic_running'] = True
+        with st.spinner("Running Basic Mission Data Agent..."):
+            run_agent(BasicMissionData(), 'basic')
+        st.session_state['basic_running'] = False
+    if stop_pressed:
+        stop_agent()
+    # Show message if agent was stopped
+    if st.session_state.get('stop_agent') and run_pressed:
+        st.warning("🛑 You have stopped the agent execution.")
+    if st.session_state.get('basic_running', False):
+        st.info("⏳ Agent is running in the background. Please wait...")
     if st.session_state['results']['basic']:
         with st.expander("Show Agent's Thinking (Basic Mission Data)", expanded=False):
-            st.code(st.session_state['thoughts']['basic'] or "No reasoning available.", language="markdown")
+            raw_output = st.session_state['results']['basic'].get('raw_output')
+            if raw_output:
+                st.code(raw_output, language="markdown")
+            else:
+                st.code(st.session_state['thoughts']['basic'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
         st.markdown(pretty_print_dict_table(st.session_state['results']['basic']), unsafe_allow_html=True)
+        # Download section
+        result = st.session_state['results']['basic']
+        if isinstance(result, dict):
+            # Remove raw_output and error fields for CSV
+            csv_data = {k: v for k, v in result.items() if k not in ('raw_output', 'error', 'satellite_name')}
+            df = pd.DataFrame([csv_data])
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="Download as CSV",
+                data=csv_buffer.getvalue(),
+                file_name=f"basic_mission_data_{satellite_name}.csv",
+                mime="text/csv"
+            )
 
 if page.startswith("🔬"):
     st.header("🔬 Technical Data")
     st.info("Extracts sensor specs, spectral bands, and technological breakthroughs.", icon="🔬")
     st.markdown("<hr>", unsafe_allow_html=True)
     col1, col2 = st.columns([2,1])
-    with col1:
-        if st.button("Run Technical Data Agent", key="run_technical", use_container_width=True):
-            reset_stop_agent()
-            with st.spinner("Running Technical Data Agent..."):
-                run_agent(TechnicalData(), 'technical')
-    with col2:
-        if st.button("Stop Agent", key="stop_technical", use_container_width=True):
-            stop_agent()
+    run_pressed = col1.button("Run Technical Data Agent", key="run_technical", use_container_width=True)
+    stop_pressed = col2.button("Stop Agent", key="stop_technical", use_container_width=True)
+    if run_pressed:
+        reset_stop_agent()
+        st.session_state['technical_running'] = True
+        with st.spinner("Running Technical Data Agent..."):
+            run_agent(TechnicalData(), 'technical')
+        st.session_state['technical_running'] = False
+    if stop_pressed:
+        stop_agent()
+    if st.session_state.get('stop_agent') and run_pressed:
+        st.warning("🛑 You have stopped the agent execution.")
+    if st.session_state.get('technical_running', False):
+        st.info("⏳ Agent is running in the background. Please wait...")
     if st.session_state['results']['technical']:
         with st.expander("Show Agent's Thinking (Technical Data)", expanded=False):
-            st.code(st.session_state['thoughts']['technical'] or "No reasoning available.", language="markdown")
+            raw_output = st.session_state['results']['technical'].get('raw_output')
+            if raw_output:
+                st.code(raw_output, language="markdown")
+            else:
+                st.code(st.session_state['thoughts']['technical'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
         st.markdown(pretty_print_dict_table(st.session_state['results']['technical']), unsafe_allow_html=True)
+        # Download section
+        result = st.session_state['results']['technical']
+        if isinstance(result, dict):
+            csv_data = {k: v for k, v in result.items() if k not in ('raw_output', 'error', 'satellite_name')}
+            df = pd.DataFrame([csv_data])
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="Download as CSV",
+                data=csv_buffer.getvalue(),
+                file_name=f"technical_data_{satellite_name}.csv",
+                mime="text/csv"
+            )
 
 if page.startswith("🚀"):
     st.header("🚀 Launch Data")
     st.info("Extracts launch mass, success, and reusability details.", icon="🚀")
     st.markdown("<hr>", unsafe_allow_html=True)
     col1, col2 = st.columns([2,1])
-    with col1:
-        if st.button("Run Launch Data Agent", key="run_launch", use_container_width=True):
-            reset_stop_agent()
-            with st.spinner("Running Launch Data Agent..."):
-                run_agent(LaunchData(), 'launch')
-    with col2:
-        if st.button("Stop Agent", key="stop_launch", use_container_width=True):
-            stop_agent()
+    run_pressed = col1.button("Run Launch Data Agent", key="run_launch", use_container_width=True)
+    stop_pressed = col2.button("Stop Agent", key="stop_launch", use_container_width=True)
+    if run_pressed:
+        reset_stop_agent()
+        st.session_state['launch_running'] = True
+        with st.spinner("Running Launch Data Agent..."):
+            run_agent(LaunchData(), 'launch')
+        st.session_state['launch_running'] = False
+    if stop_pressed:
+        stop_agent()
+    if st.session_state.get('stop_agent') and run_pressed:
+        st.warning("🛑 You have stopped the agent execution.")
+    if st.session_state.get('launch_running', False):
+        st.info("⏳ Agent is running in the background. Please wait...")
     if st.session_state['results']['launch']:
         with st.expander("Show Agent's Thinking (Launch Data)", expanded=False):
-            st.code(st.session_state['thoughts']['launch'] or "No reasoning available.", language="markdown")
+            raw_output = st.session_state['results']['launch'].get('raw_output')
+            if raw_output:
+                st.code(raw_output, language="markdown")
+            else:
+                st.code(st.session_state['thoughts']['launch'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
         st.markdown(pretty_print_dict_table(st.session_state['results']['launch']), unsafe_allow_html=True)
+        # Download section
+        result = st.session_state['results']['launch']
+        if isinstance(result, dict):
+            csv_data = {k: v for k, v in result.items() if k not in ('raw_output', 'error', 'satellite_name')}
+            df = pd.DataFrame([csv_data])
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="Download as CSV",
+                data=csv_buffer.getvalue(),
+                file_name=f"launch_data_{satellite_name}.csv",
+                mime="text/csv"
+            )
 
 if page.startswith("💰"):
     st.header("💰 Cost & Other Data")
     st.info("Extracts mission cost, launch cost, vehicle type, and launch date.", icon="💰")
     st.markdown("<hr>", unsafe_allow_html=True)
     col1, col2 = st.columns([2,1])
-    with col1:
-        if st.button("Run Cost & Other Data Agent", key="run_cost", use_container_width=True):
-            reset_stop_agent()
-            with st.spinner("Running Cost & Other Data Agent..."):
-                run_agent(CostAndOtherData(), 'cost')
-    with col2:
-        if st.button("Stop Agent", key="stop_cost", use_container_width=True):
-            stop_agent()
+    run_pressed = col1.button("Run Cost & Other Data Agent", key="run_cost", use_container_width=True)
+    stop_pressed = col2.button("Stop Agent", key="stop_cost", use_container_width=True)
+    if run_pressed:
+        reset_stop_agent()
+        st.session_state['cost_running'] = True
+        with st.spinner("Running Cost & Other Data Agent..."):
+            run_agent(CostAndOtherData(), 'cost')
+        st.session_state['cost_running'] = False
+    if stop_pressed:
+        stop_agent()
+    if st.session_state.get('stop_agent') and run_pressed:
+        st.warning("🛑 You have stopped the agent execution.")
+    if st.session_state.get('cost_running', False):
+        st.info("⏳ Agent is running in the background. Please wait...")
     if st.session_state['results']['cost']:
         with st.expander("Show Agent's Thinking (Cost & Other Data)", expanded=False):
-            st.code(st.session_state['thoughts']['cost'] or "No reasoning available.", language="markdown")
+            raw_output = st.session_state['results']['cost'].get('raw_output')
+            if raw_output:
+                st.code(raw_output, language="markdown")
+            else:
+                st.code(st.session_state['thoughts']['cost'] or "No reasoning available.", language="markdown")
         st.subheader("Extracted Data:")
         st.markdown(pretty_print_dict_table(st.session_state['results']['cost']), unsafe_allow_html=True)
+        # Download section
+        result = st.session_state['results']['cost']
+        if isinstance(result, dict):
+            csv_data = {k: v for k, v in result.items() if k not in ('raw_output', 'error', 'satellite_name')}
+            df = pd.DataFrame([csv_data])
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="Download as CSV",
+                data=csv_buffer.getvalue(),
+                file_name=f"cost_data_{satellite_name}.csv",
+                mime="text/csv"
+            )
